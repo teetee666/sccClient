@@ -5,7 +5,6 @@ use GuzzleHttp\Cookie;
 
 class sccClient
 {
-
     private $username;
     private $password;
     private $passkey;
@@ -13,18 +12,18 @@ class sccClient
     public function __construct()
     {
         $this->categories = [
-            8  => 'Movies/DVD-R',
+            8 => 'Movies/DVD-R',
             22 => 'Movies/x264',
-            7  => 'Movies/XviD',
+            7 => 'Movies/XviD',
             27 => 'TV/HD-x264',
             17 => 'TV/SD-x264',
             11 => 'TV/XviD',
-            3  => 'Games/PC',
-            5  => 'Games/PS3',
+            3 => 'Games/PC',
+            5 => 'Games/PS3',
             20 => 'Games/PSP',
             28 => 'Games/WII',
             23 => 'Games/XBOX360',
-            1  => 'APPS/ISO',
+            1 => 'APPS/ISO',
             14 => 'DOX',
             21 => 'MISC',
             41 => 'P2P/Movies/HD-x264',
@@ -32,11 +31,11 @@ class sccClient
             43 => 'P2P/Movies/XviD',
             44 => 'P2P/TV/HD',
             45 => 'P2P/TV/SD',
-            2  => '0DAY/APPS',
+            2 => '0DAY/APPS',
             40 => 'FLAC',
             13 => 'MP3',
             15 => 'MVID',
-            4  => 'Movies/Packs',
+            4 => 'Movies/Packs',
             26 => 'TV/Packs',
             29 => 'Games/Packs',
             37 => 'XXX/Packs',
@@ -51,22 +50,23 @@ class sccClient
             36 => 'XXX/0DAY',
         ];
 
-        $this->db = new mysqli("127.0.0.1", "root", "rootpwd", "scc");
+        $this->db = new mysqli('127.0.0.1', 'root', 'rootpwd', 'scc');
         $this->httpClient = new Client(['cookies' => true]);
-        $this->cookieJar = new \GuzzleHttp\Cookie\FileCookieJar("cookies.json", true);
+        $this->cookieJar = new \GuzzleHttp\Cookie\FileCookieJar('cookies.json', true);
     }
 
     /**
-     * Tries to login and create/update cookie
+     * Tries to login and create/update cookie.
      *
      * @param string $username
      * @param string $password
+     *
      * @throws Exception
      */
     public function login($username = '', $password = '')
     {
         if (empty($username) || empty($password)) {
-            throw new Exception("Missing username and/or password.");
+            throw new Exception('Missing username and/or password.');
         } else {
             $this->username = $username;
             $this->password = $password;
@@ -78,9 +78,10 @@ class sccClient
     }
 
     /**
-     * Tries to actually login
+     * Tries to actually login.
      *
-     * @return boolean
+     * @return bool
+     *
      * @throws Exception
      */
     private function doLogin()
@@ -92,22 +93,22 @@ class sccClient
                 'form_params' => [
                     'username' => $this->username,
                     'password' => $this->password,
-                    'submit' => 'come on in'
-                ]
+                    'submit' => 'come on in',
+                ],
             ]
         );
 
         if (preg_match('/SceneAccess \| Login/', $loginResponse)) {
-            throw new Exception("Username and/or password wrong");
+            throw new Exception('Username and/or password wrong');
         } else {
             $this->getTorrentsFromHTML($loginResponse);
         }
     }
 
     /**
-     * Checks if we are logged in or not by doing a GET request to /browse
+     * Checks if we are logged in or not by doing a GET request to /browse.
      *
-     * @return boolean
+     * @return bool
      */
     private function isLoggedIn()
     {
@@ -129,12 +130,14 @@ class sccClient
     }
 
     /**
-     * Retrieves page from scc
+     * Retrieves page from scc.
      *
      * @param string $method
      * @param string $url
-     * @param array $postBody
+     * @param array  $postBody
+     *
      * @throws Exception
+     *
      * @return string
      */
     public function httpRequest($method, $url, $postBody = array())
@@ -153,16 +156,17 @@ class sccClient
         $statuscode = (int) $res->getStatusCode();
 
         if (preg_match('/<title>Website is offline/', $response)) {
-            throw new Exception("Website is offline, try again later");
+            throw new Exception('Website is offline, try again later');
         }
 
         return $response;
     }
 
     /**
-     * Does search and returns found items in array
+     * Does search and returns found items in array.
      *
      * @param string $search
+     *
      * @return array
      */
     public function search($search)
@@ -176,22 +180,24 @@ class sccClient
     }
 
     /**
-     * Creates download url for torrent
+     * Creates download url for torrent.
      *
-     * @param integer $sccId
+     * @param int $sccId
+     *
      * @throws Exception
+     *
      * @return string
      */
     private function getTorrentDownloadUrlById($sccId)
     {
-        $prepare = $this->db->prepare("
+        $prepare = $this->db->prepare('
             SELECT
                 `name`
             FROM
                 `torrents`
             WHERE
                 `sccId` = ?;
-        ");
+        ');
 
         $prepare->bind_param('i', $sccId);
         $prepare->execute();
@@ -200,27 +206,28 @@ class sccClient
         if ($row = $result->fetch_array(MYSQLI_NUM)) {
             $torrentName = $row[0];
         } else {
-            throw new Exception("No name found for ".$sccId);
+            throw new Exception('No name found for '.$sccId);
         }
 
         $prepare->close();
 
         if (!$this->passkey) {
-            if (file_exists(__DIR__ . '/.passkey')) {
-                $this->passkey = file_get_contents(__DIR__ . '/.passkey');
+            if (file_exists(__DIR__.'/.passkey')) {
+                $this->passkey = file_get_contents(__DIR__.'/.passkey');
             } else {
-                throw new Exception("No passkey found");
+                throw new Exception('No passkey found');
             }
         }
 
-        return "https://sceneaccess.eu/download/".$sccId."/".$this->passkey."/".$torrentName.".torrent";
+        return 'https://sceneaccess.eu/download/'.$sccId.'/'.$this->passkey.'/'.$torrentName.'.torrent';
     }
 
     /**
-     * Download torrentfile to folder
+     * Download torrentfile to folder.
      *
-     * @param integer $sccId
+     * @param int    $sccId
      * @param string $saveFolder
+     *
      * @return mixed
      */
     public function downloadTorrentById($sccId, $saveFolder)
@@ -233,13 +240,15 @@ class sccClient
         if (false === $saveFolder) {
             return base64_encode($torrentData);
         } else {
-            return file_put_contents($saveFolder.'/'.md5(time().rand(1,99)).'.torrent', $torrentData);
+            return file_put_contents($saveFolder.'/'.md5(time().rand(1, 99)).'.torrent', $torrentData);
         }
     }
 
     /**
-     * Get search url for scc
+     * Get search url for scc.
+     *
      * @param string $search
+     *
      * @return string
      */
     private function getSearchUrl($search)
@@ -250,25 +259,26 @@ class sccClient
             $categories .= '&c'.$categoryId.'=1';
         }
 
-        return "https://sceneaccess.eu/all?search=".urlencode($search)."&method=2".$categories;
+        return 'https://sceneaccess.eu/all?search='.urlencode($search).'&method=2'.$categories;
     }
 
     /**
-     * Checks if the rls exists in our db
+     * Checks if the rls exists in our db.
      *
-     * @param integer $sccId
-     * @return boolean
+     * @param int $sccId
+     *
+     * @return bool
      */
     private function torrentExists($sccId = 0)
     {
-        $res = $this->db->prepare("
+        $res = $this->db->prepare('
             SELECT
                 `id`
             FROM
                 `torrents`
             WHERE
                 `sccId` = ?;
-        ");
+        ');
 
         $res->bind_param('i', $sccId);
         $e = $res->execute();
@@ -281,24 +291,26 @@ class sccClient
     }
 
     /**
-     * Adds torrent to db for later use
+     * Adds torrent to db for later use.
      *
      * @param array $torrentInfo
+     *
      * @throws Exception
-     * @return boolean
+     *
+     * @return bool
      */
     private function addTorrent(array $torrentInfo = array())
     {
         $neededKeys = ['name', 'category', 'sccId', 'size', 'files', 'added'];
         foreach ($neededKeys as $neededKey) {
             if (!array_key_exists($neededKey, $torrentInfo)) {
-                throw new Exception("Missing key: ".$neededKey);
+                throw new Exception('Missing key: '.$neededKey);
             } else {
                 ${$neededKey} = $torrentInfo[$neededKey];
             }
         }
 
-        $ins = $this->db->prepare("
+        $ins = $this->db->prepare('
             INSERT INTO
                 `torrents`
             (
@@ -318,10 +330,10 @@ class sccClient
                 ?,
                 ?
             );
-        ");
+        ');
 
         $ins->bind_param(
-            "siidsi",
+            'siidsi',
             $name,
             $category,
             $files,
@@ -339,26 +351,29 @@ class sccClient
     }
 
     /**
-     * Returns the name of category
+     * Returns the name of category.
      *
      * @param string|int $categoryId
+     *
      * @throws Exception
+     *
      * @return string
      */
     private function getCategoryNameById($categoryId)
     {
         if (!isset($this->categories[$categoryId])) {
-            throw new Exception("No such category found.");
+            throw new Exception('No such category found.');
         }
 
         return $this->categories[$categoryId];
     }
 
     /**
-     * Converts sizes used in site to mb
+     * Converts sizes used in site to mb.
      *
      * @param string $source
-     * @param float $sizeInSource
+     * @param float  $sizeInSource
+     *
      * @return float
      */
     private function sizeToMB($source, $sizeInSource)
@@ -390,13 +405,14 @@ class sccClient
     {
         $this->passkey = $passkey;
         /* I am more than sorry about this "hack" */
-        file_put_contents(".passkey", $passkey);
+        file_put_contents('.passkey', $passkey);
     }
 
     /**
-     * Parses given HTML string and returns array of torrents with id, name.. etc
+     * Parses given HTML string and returns array of torrents with id, name.. etc.
      *
      * @param string $html
+     *
      * @return array
      */
     private function getTorrentsFromHTML($html)
@@ -411,7 +427,7 @@ class sccClient
         $torrents = array();
 
         foreach ($elements as $e) {
-            $i++;
+            ++$i;
 
             /* We dont want the header info ("Name Size Added Snatched") */
             if (1 == $i) {
