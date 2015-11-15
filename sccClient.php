@@ -196,7 +196,7 @@ class sccClient
         }
 
         if (preg_match('/SceneAccess \| Login/', $response)) {
-            throw new Exception('Username and/or password wrong');
+            //throw new Exception('Username and/or password wrong');
         }
 
         return $response;
@@ -305,7 +305,7 @@ class sccClient
      *
      * @return bool
      */
-    private function torrentExists($sccId = 0)
+    public function torrentExists($sccId = 0)
     {
         $res = $this->db->prepare('
             SELECT

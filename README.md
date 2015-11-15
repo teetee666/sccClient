@@ -64,3 +64,19 @@ GET /endpoint.php/download/1217277/af651af328435995e85d722cbf9bc5b4
 ```
 The actual torrent
 ```
+
+#Multidownload
+
+```
+Method: POST
+Path: /endpoint.php/multidownload/$token
+Body: json_encode(array('idlist' => array($id, $id2, $id3, etc..)))
+
+Example:
+POST /endpoint.php/multidownload/af651af328435995e85d722cbf9bc5b4
+{"idlist":[825635, 828222, 958780]}
+```
+
+```
+Gives .zip with wanted torrents
+```
