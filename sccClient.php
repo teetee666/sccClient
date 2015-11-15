@@ -41,11 +41,11 @@ class sccClient
             29 => 'Games/Packs',
             37 => 'XXX/Packs',
             38 => 'Music/Packs',
-            31 => 'F/Movies/DVD-R',
-            32 => 'F/Movies/x264',
-            30 => 'F/Movies/XviD',
-            34 => 'F/TV/x264',
-            33 => 'F/TV/XviD',
+            31 => 'Foreign/Movies/DVD-R',
+            32 => 'Foreign/Movies/x264',
+            30 => 'Foreign/Movies/XviD',
+            34 => 'Foreign/TV/x264',
+            33 => 'Foreign/TV/XviD',
             12 => 'XXX/XviD',
             35 => 'XXX/x264',
             36 => 'XXX/0DAY',
@@ -63,8 +63,8 @@ class sccClient
 
     private function createToken()
     {
-        $this->token = md5(time().rand(1,9999));
-        return true; 
+        $this->token = md5(time().rand(1, 9999));
+        return true;
     }
 
     /**
