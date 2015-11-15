@@ -9,7 +9,7 @@ POST /endpoint.php/login/myusername/mypassword
   "status": "success",
   "token": "af651af328435995e85d722cbf9bc5b4"
 }
-```'
+```
 
 #Search
 
