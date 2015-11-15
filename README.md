@@ -1,6 +1,10 @@
 #Login
 
 ```
+Method: POST
+Path: /endpoint.php/login/$username/$password
+
+Example:
 POST /endpoint.php/login/myusername/mypassword
 ```
 
@@ -14,6 +18,10 @@ POST /endpoint.php/login/myusername/mypassword
 #Search
 
 ```
+Method: GET
+Path: /endpoint.php/search/$search/$token
+
+Example:
 GET /endpoint.php/search/the blacklist 1080p/af651af328435995e85d722cbf9bc5b4
 ```
 
@@ -45,4 +53,14 @@ GET /endpoint.php/search/the blacklist 1080p/af651af328435995e85d722cbf9bc5b4
 
 #Download
 
-Work in progress
+```
+Method: GET
+Path: /endpoint.php/download/$sccId/$token
+
+Example:
+GET /endpoint.php/download/1217277/af651af328435995e85d722cbf9bc5b4
+```
+
+```
+The actual torrent
+```

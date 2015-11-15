@@ -120,11 +120,7 @@ class sccClient
             $this->token
         );
 
-        if (preg_match('/SceneAccess \| Login/', $loginResponse)) {
-            throw new Exception('Username and/or password wrong');
-        } else {
-            $this->getTorrentsFromHTML($loginResponse);
-        }
+        $this->getTorrentsFromHTML($loginResponse);
     }
 
     /**
@@ -197,6 +193,10 @@ class sccClient
 
         if (preg_match('/<title>Website is offline/', $response)) {
             throw new Exception('Website is offline, try again later');
+        }
+
+        if (preg_match('/SceneAccess \| Login/', $response)) {
+            throw new Exception('Username and/or password wrong');
         }
 
         return $response;
@@ -274,10 +274,7 @@ class sccClient
         );
 
         if (false === $saveFolder) {
-            /*
-             * TODO return $torrentData  to slim/whoever is using this function
-             */
-            echo $torrentData;
+            return (string) $torrentData;
         } else {
             return file_put_contents($saveFolder.'/'.md5(time().rand(1, 99)).'.torrent', $torrentData);
         }

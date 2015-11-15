@@ -54,10 +54,11 @@ $app->get('/search/:search/:token', function ($search, $token) use ($app, $scc) 
 
 $app->get('/download/:id/:token', function ($id, $token) use ($app, $scc) {
     $app->response->headers->set('Content-Type', 'application/x-bittorrent');
+    $app->response->headers->set('Content-Disposition', 'attachment; filename="'.$id.'.torrent"');
+
     $scc->setToken($token);
 
-    $torrentData = $scc->downloadTorrentById($id, __DIR__);
-    echo $torrentData;
+    echo $scc->downloadTorrentById($id, false);
 });
 
 $app->run();
