@@ -51,7 +51,7 @@ class sccClient
             36 => 'XXX/0DAY',
         ];
 
-        $this->db = new mysqli('127.0.0.1', 'root', 'rootspwd', 'scc');
+        $this->db = new mysqli('127.0.0.1', 'scc', 'pndGufun9Pqyczhj', 'scc');
         $this->redis = new Predis\Client();
         $this->http = new Client(['cookies' => true]);
     }
@@ -168,12 +168,11 @@ class sccClient
     {
         $postBody['allow_redirects'] = true;
 
+        $cookieFile = tempnam("/tmp", "cookie");
+
         if (isset($token)) {
             $cookieDataFromRedisByToken = $this->redis->get('cookie_'.$token);
-            $cookieFile = tempnam("/tmp", "cookie");
             file_put_contents($cookieFile, $cookieDataFromRedisByToken);
-        } else {
-            $cookieFile = __DIR__ . '/cookies.json';
         }
 
         $this->cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
@@ -185,12 +184,13 @@ class sccClient
             $postBody
         );
 
-        $this->cookieJar->save($cookieFile);
-
         if (isset($token)) {
+            $this->cookieJar->save($cookieFile);
             $cookieData = file_get_contents($cookieFile);
             $this->redis->set('cookie_'.$token, $cookieData);
         }
+
+        unset($cookieFile);
 
         $response = (string) $res->getBody();
         $statuscode = (int) $res->getStatusCode();

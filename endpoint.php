@@ -47,7 +47,8 @@ $app->get('/search/:search/:token', function ($search, $token) use ($app, $scc) 
         array(
             'status' => 'success',
             'result' => $result,
-        )
+        ),
+        JSON_NUMERIC_CHECK
     );
 });
 
