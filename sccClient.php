@@ -8,6 +8,7 @@ class sccClient
     private $username;
     private $password;
     private $passkey;
+    private $token;
 
     public function __construct()
     {
@@ -50,9 +51,20 @@ class sccClient
             36 => 'XXX/0DAY',
         ];
 
-        $this->db = new mysqli('127.0.0.1', 'root', 'rootpwd', 'scc');
-        $this->httpClient = new Client(['cookies' => true]);
-        $this->cookieJar = new \GuzzleHttp\Cookie\FileCookieJar('cookies.json', true);
+        $this->db = new mysqli('127.0.0.1', 'root', 'rootspwd', 'scc');
+        $this->redis = new Predis\Client();
+        $this->http = new Client(['cookies' => true]);
+    }
+
+    public function setToken($token)
+    {
+        $this->token = $token;
+    }
+
+    private function createToken()
+    {
+        $this->token = md5(time().rand(1,9999));
+        return true; 
     }
 
     /**
@@ -75,6 +87,10 @@ class sccClient
         if (false === $this->isLoggedIn()) {
             $this->doLogin();
         }
+
+        if (isset($this->token)) {
+            return $this->token;
+        }
     }
 
     /**
@@ -86,6 +102,11 @@ class sccClient
      */
     private function doLogin()
     {
+        if (!isset($this->token)) {
+            $this->createToken();
+            $this->redis->set('cookie_'.$this->token, '[]');
+        }
+
         $loginResponse = $this->httpRequest(
             'POST',
             'https://sceneaccess.eu/login',
@@ -95,7 +116,8 @@ class sccClient
                     'password' => $this->password,
                     'submit' => 'come on in',
                 ],
-            ]
+            ],
+            $this->token
         );
 
         if (preg_match('/SceneAccess \| Login/', $loginResponse)) {
@@ -114,7 +136,9 @@ class sccClient
     {
         $response = $this->httpRequest(
             'GET',
-            'https://sceneaccess.eu/browse'
+            'https://sceneaccess.eu/browse',
+            array(),
+            $this->token
         );
 
         $titleElement = $this->DOMDocumentXPathQuery($response, '//html/head/title');
@@ -140,17 +164,33 @@ class sccClient
      *
      * @return string
      */
-    public function httpRequest($method, $url, $postBody = array())
+    public function httpRequest($method, $url, $postBody = array(), $token = '')
     {
-        echo $url.PHP_EOL;
         $postBody['allow_redirects'] = true;
+
+        if (isset($token)) {
+            $cookieDataFromRedisByToken = $this->redis->get('cookie_'.$token);
+            $cookieFile = tempnam("/tmp", "cookie");
+            file_put_contents($cookieFile, $cookieDataFromRedisByToken);
+        } else {
+            $cookieFile = __DIR__ . '/cookies.json';
+        }
+
+        $this->cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
         $postBody['cookies'] = $this->cookieJar;
 
-        $res = $this->httpClient->request(
+        $res = $this->http->request(
             $method,
             $url,
             $postBody
         );
+
+        $this->cookieJar->save($cookieFile);
+
+        if (isset($token)) {
+            $cookieData = file_get_contents($cookieFile);
+            $this->redis->set('cookie_'.$token, $cookieData);
+        }
 
         $response = (string) $res->getBody();
         $statuscode = (int) $res->getStatusCode();
@@ -174,7 +214,9 @@ class sccClient
         return $this->getTorrentsFromHTML(
             $this->httpRequest(
                 'GET',
-                $this->getSearchUrl($search)
+                $this->getSearchUrl($search),
+                array(),
+                $this->token
             )
         );
     }
@@ -211,22 +253,14 @@ class sccClient
 
         $prepare->close();
 
-        if (!$this->passkey) {
-            if (file_exists(__DIR__.'/.passkey')) {
-                $this->passkey = file_get_contents(__DIR__.'/.passkey');
-            } else {
-                throw new Exception('No passkey found');
-            }
-        }
-
-        return 'https://sceneaccess.eu/download/'.$sccId.'/'.$this->passkey.'/'.$torrentName.'.torrent';
+        return 'https://sceneaccess.eu/download/'.$sccId.'/'.$this->getPasskey().'/'.$torrentName.'.torrent';
     }
 
     /**
      * Download torrentfile to folder.
      *
-     * @param int    $sccId
-     * @param string $saveFolder
+     * @param int         $sccId
+     * @param string|bool $saveFolder
      *
      * @return mixed
      */
@@ -234,11 +268,16 @@ class sccClient
     {
         $torrentData = $this->httpRequest(
             'GET',
-            $this->getTorrentDownloadUrlById($sccId)
+            $this->getTorrentDownloadUrlById($sccId),
+            array(),
+            $this->token
         );
 
         if (false === $saveFolder) {
-            return base64_encode($torrentData);
+            /*
+             * TODO return $torrentData  to slim/whoever is using this function
+             */
+            echo $torrentData;
         } else {
             return file_put_contents($saveFolder.'/'.md5(time().rand(1, 99)).'.torrent', $torrentData);
         }
@@ -399,13 +438,22 @@ class sccClient
     }
 
     /**
+     * Sets passkey in redis with token
+     *
      * @param string $passkey
      */
     private function setPasskey($passkey)
     {
         $this->passkey = $passkey;
-        /* I am more than sorry about this "hack" */
-        file_put_contents('.passkey', $passkey);
+        $this->redis->set('passkey_'.$this->token, $passkey);
+    }
+
+    /**
+     * Returns passkey 
+     */
+    private function getPasskey()
+    {
+        return $this->redis->get('passkey_'.$this->token);
     }
 
     /**
@@ -438,6 +486,7 @@ class sccClient
             $nodeDom->loadHTML($doc->saveHTML($e));
             $nodeXpath = new DOMXpath($nodeDom);
             $nodeElements = $nodeXpath->query('//tr/td');
+            $rowId = $i-2;
 
             foreach ($nodeElements as $nodeElement) {
                 $nodeHtml = $nodeDom->saveHTML($nodeElement);
@@ -449,7 +498,8 @@ class sccClient
                       [1]=> string(1) "1"
                     */
 
-                    $torrents[$i]['category'] = $category[1];
+                    $torrents[$rowId]['category'] = $category[1];
+                    $torrents[$rowId]['categoryName'] = $this->getCategoryNameById($category[1]);
                 } elseif (preg_match('/td_dl/', $nodeHtml)) {
                     $aHrefElement = $this->DOMDocumentXPathQuery($nodeHtml, '//td/a/@href');
                     preg_match('/^download\/([0-9]+)\/([a-zA-Z0-9]+)\/(.*)\.torrent$/', $aHrefElement->item(0)->nodeValue, $aHrefRes);
@@ -459,8 +509,8 @@ class sccClient
                       [3]=> string(53) "Walkabout.1971.REAL.PROPER.1080p.BluRay.x264-SADPANDA"
                     */
 
-                    $torrents[$i]['sccId'] = $aHrefRes[1];
-                    $torrents[$i]['name'] = $aHrefRes[3];
+                    $torrents[$rowId]['sccId'] = $aHrefRes[1];
+                    $torrents[$rowId]['name'] = $aHrefRes[3];
 
                     if (!isset($this->passkey)) {
                         $this->setPasskey($aHrefRes[2]);
@@ -473,8 +523,8 @@ class sccClient
                       [3]=> string(2) "99"
                     */
 
-                    $torrents[$i]['size'] = $this->sizeToMB($fileAndSize[2], $fileAndSize[1]);
-                    $torrents[$i]['files'] = $fileAndSize[3];
+                    $torrents[$rowId]['size'] = $this->sizeToMB($fileAndSize[2], $fileAndSize[1]);
+                    $torrents[$rowId]['files'] = $fileAndSize[3];
                 } elseif (preg_match('/ttr_added/', $nodeHtml)) {
                     preg_match('/^([0-9-]{10})([0-9:]{8})$/', strip_tags($nodeHtml), $timestamp);
                     /*
@@ -482,7 +532,7 @@ class sccClient
                       [2]=> string(8) "23:34:18"
                     */
 
-                    $torrents[$i]['added'] = $timestamp[1].' '.$timestamp[2];
+                    $torrents[$rowId]['added'] = $timestamp[1].' '.$timestamp[2];
                 }
             }
         }
@@ -508,6 +558,6 @@ class sccClient
 
     public function __desctruct()
     {
-        $this->mysqli->close();
+        $this->db->close();
     }
 }

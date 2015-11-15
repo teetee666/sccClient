@@ -6,29 +6,29 @@ $app = new \Slim\Slim();
 
 $scc = new sccClient();
 
-function checkCookie()
-{
-    if (!file_exists(__DIR__.'/cookies.json')) {
-        die(
-            json_encode(
-                array(
-                    'error' => 'You must first use the [POST] /login/:username/:password endpoint to login.',
-                )
-            )
-        );
-    }
-}
-
 $app->post('/login/:username/:password', function ($username, $password) use ($app, $scc) {
     $app->response->headers->set('Content-Type', 'application/json');
 
-    if (true === $scc->login($username, $password)) {
-        // todo: stuff
+    $response = $scc->login($username, $password);
+
+    if ($response) {
+        $status = 'success';
+    } else {
+        $status = 'failed';
     }
+
+    echo json_encode(
+        array(
+            'status' => $status,
+            'token' => $response,
+        )
+    );
+
 });
 
-$app->get('/search/:search', 'checkCookie', function ($search) use ($app, $scc) {
+$app->get('/search/:search/:token', function ($search, $token) use ($app, $scc) {
     $app->response->headers->set('Content-Type', 'application/json');
+    $scc->setToken($token);
 
     try {
         $result = $scc->search($search);
@@ -36,7 +36,7 @@ $app->get('/search/:search', 'checkCookie', function ($search) use ($app, $scc) 
         die(
             json_encode(
                 array(
-                    'status' => 'fail',
+                    'status' => 'failed',
                     'result' => $e->getMessage(),
                 )
             )
@@ -51,11 +51,12 @@ $app->get('/search/:search', 'checkCookie', function ($search) use ($app, $scc) 
     );
 });
 
-$app->get('/download/:id', 'checkCookie', function ($id) use ($app, $scc) {
-    //$app->response->headers->set('Content-Type', 'application/x-bittorrent');
+$app->get('/download/:id/:token', function ($id, $token) use ($app, $scc) {
+    $app->response->headers->set('Content-Type', 'application/x-bittorrent');
+    $scc->setToken($token);
 
     $torrentData = $scc->downloadTorrentById($id, __DIR__);
-    echo base64_decode($torrentData);
+    echo $torrentData;
 });
 
 $app->run();
