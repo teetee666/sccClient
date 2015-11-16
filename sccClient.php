@@ -51,19 +51,42 @@ class sccClient
             36 => 'XXX/0DAY',
         ];
 
-        $this->db = new mysqli('127.0.0.1', 'scc', 'pndGufun9Pqyczhj', 'scc');
+        $this->db = new PDO("mysql:host=localhost;dbname=scc;", 'root', 'rootpwd');
         $this->redis = new Predis\Client();
         $this->http = new Client(['cookies' => true]);
     }
 
+    /**
+     * Binds given params to given sql and returns pdoobject
+     *
+     * @param string $sql
+     * @param array  $params
+     * @return pdo:object
+     */
+    private function executeQueryWithParams($sql, array $params = array())
+    {
+        $ret = $this->db->prepare($sql);
+        $ret->execute($params);
+        return $ret;
+    }
+
+    /**
+     * Sets token
+     *
+     * @param string $token
+     */
     public function setToken($token)
     {
         $this->token = $token;
     }
 
+    /**
+     * Creates token from current time and uniqid() output
+     * @return boolean
+     */
     private function createToken()
     {
-        $this->token = md5(time().rand(1, 9999));
+        $this->token = md5(time().uniqid());
         return true;
     }
 
@@ -150,7 +173,7 @@ class sccClient
     }
 
     /**
-     * Retrieves page from scc.
+     * Retrieves page from scc
      *
      * @param string $method
      * @param string $url
@@ -203,7 +226,7 @@ class sccClient
     }
 
     /**
-     * Does search and returns found items in array.
+     * Does search and returns found items in array
      *
      * @param string $search
      *
@@ -222,7 +245,7 @@ class sccClient
     }
 
     /**
-     * Creates download url for torrent.
+     * Creates download url for torrent
      *
      * @param int $sccId
      *
@@ -232,32 +255,31 @@ class sccClient
      */
     private function getTorrentDownloadUrlById($sccId)
     {
-        $prepare = $this->db->prepare('
-            SELECT
-                `name`
-            FROM
-                `torrents`
-            WHERE
-                `sccId` = ?;
-        ');
+        $execute = $this->executeQueryWithParams(
+            '
+                SELECT 
+                    `name` 
+                FROM 
+                    `torrents` 
+                WHERE 
+                    `sccId` = :sccId
+                LIMIT 1
+            ',
+            array(
+                ':sccId' => $sccId
+            )
+        );
 
-        $prepare->bind_param('i', $sccId);
-        $prepare->execute();
-        $result = $prepare->get_result();
-
-        if ($row = $result->fetch_array(MYSQLI_NUM)) {
-            $torrentName = $row[0];
+        $results = $execute->fetchAll();
+        if (isset($results[0]['name'])) {
+            return 'https://sceneaccess.eu/download/'.$sccId.'/'.$this->getPasskey().'/'.$results[0]['name'].'.torrent';
         } else {
-            throw new Exception('No name found for '.$sccId);
+            return false;
         }
-
-        $prepare->close();
-
-        return 'https://sceneaccess.eu/download/'.$sccId.'/'.$this->getPasskey().'/'.$torrentName.'.torrent';
     }
 
     /**
-     * Download torrentfile to folder.
+     * Downloads wanted torrentfile
      *
      * @param int         $sccId
      * @param string|bool $saveFolder
@@ -307,23 +329,55 @@ class sccClient
      */
     public function torrentExists($sccId = 0)
     {
-        $res = $this->db->prepare('
-            SELECT
-                `id`
-            FROM
-                `torrents`
-            WHERE
-                `sccId` = ?;
-        ');
+        $execute = $this->executeQueryWithParams(
+            '
+                SELECT 
+                    `id` 
+                FROM 
+                    `torrents` 
+                WHERE 
+                    `sccId` = :sccId
+                LIMIT 1
+            ',
+            array(
+                ':sccId' => $sccId
+            )
+        );
 
-        $res->bind_param('i', $sccId);
-        $e = $res->execute();
+        $results = $execute->fetchAll();
 
-        if (true !== $res->fetch()) {
-            return false;
+        if (empty($results)) {
+            $this->fetchTorrentDataById($sccId);
+
+            return $this->torrentExists($sccId);
         }
 
         return true;
+    }
+
+    /**
+     * Gets details.php page from SCC, extracts torrent name and add it to db for later use
+     * TODO: Check if page is not an 404
+     *
+     * @param integer $sccId
+     * @return boolean
+     */
+    private function fetchTorrentDataById($sccId = 0)
+    {
+        $torrentUrl = "https://sceneaccess.eu/details?id=".$sccId;
+        $torrentPage = $this->httpRequest('GET', $torrentUrl, array(), $this->token);
+        $torrentNameQuery = $this->DOMDocumentXPathQuery($torrentPage, '//*[@id="details_box_header"]/h1');
+
+        return $this->addTorrent(
+            array(
+                'name' => $torrentNameQuery->item(0)->nodeValue,
+                'category' => 0,
+                'sccId' => $sccId,
+                'size' => 0,
+                'files' => 0,
+                'added' => '0000-00-00 00:00:00'
+            )
+        );
     }
 
     /**
@@ -341,45 +395,42 @@ class sccClient
         foreach ($neededKeys as $neededKey) {
             if (!array_key_exists($neededKey, $torrentInfo)) {
                 throw new Exception('Missing key: '.$neededKey);
-            } else {
-                ${$neededKey} = $torrentInfo[$neededKey];
             }
         }
 
-        $ins = $this->db->prepare('
-            INSERT INTO
-                `torrents`
-            (
-                `id`,
-                `name`,
-                `category`,
-                `files`,
-                `size`,
-                `added`,
-                `sccId`
-            ) VALUES (
-                NULL,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-            );
-        ');
-
-        $ins->bind_param(
-            'siidsi',
-            $name,
-            $category,
-            $files,
-            $size,
-            $added,
-            $sccId
+        $execute = $this->executeQueryWithParams(
+            '
+                INSERT INTO
+                    `torrents`
+                (
+                    `id`,
+                    `name`,
+                    `category`,
+                    `files`,
+                    `size`,
+                    `added`,
+                    `sccId`
+                ) VALUES (
+                    NULL,
+                    :name,
+                    :category,
+                    :files,
+                    :size,
+                    :added,
+                    :sccId
+                )
+            ',
+            array(
+                ':name' => $torrentInfo['name'],
+                ':category' => $torrentInfo['category'],
+                ':files' => $torrentInfo['files'],
+                ':size' => $torrentInfo['size'],
+                ':added' => $torrentInfo['added'],
+                ':sccId' => $torrentInfo['sccId']
+            )
         );
-        $ins->execute();
 
-        if (1 == $ins->affected_rows) {
+        if (1 == $execute->rowCount()) {
             return true;
         }
 
@@ -546,7 +597,7 @@ class sccClient
     private function DOMDocumentXPathQuery($html, $query)
     {
         $doc = new DOMDocument();
-        $doc->loadHTML($html);
+        @$doc->loadHTML($html);
         $xpath = new DOMXpath($doc);
         $elements = $xpath->query($query);
 

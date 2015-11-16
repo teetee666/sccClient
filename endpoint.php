@@ -64,8 +64,8 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
     /* Validates given json data */
 
     if ($jsonDecoded = json_decode($app->request->getBody(), true)) {
-        if (array_key_exists('idlist', $jsonDecoded) && is_array($jsonDecoded['idlist'])) {
-            foreach ($jsonDecoded['idlist'] as $id => $sccId) {
+        if (is_array($jsonDecoded)) {
+            foreach ($jsonDecoded as $id => $sccId) {
                 if (is_numeric($sccId)) {
                     if (!$scc->torrentExists($sccId)) {
                         respond('', $sccId.' is unknown id, use search first', false);
@@ -75,7 +75,7 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
                 }
             }
         } else {
-            respond('', 'idlist missing from json', false);
+            respond('', 'not valid array', false);
         }
     } else {
         respond('', 'Invalid json', false);
@@ -85,7 +85,7 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
     $zipArchive = new ZipArchive();
     $zipArchive->open($zipFile, ZipArchive::OVERWRITE);
 
-    foreach ($jsonDecoded['idlist'] as $id => $sccId) {
+    foreach ($jsonDecoded as $id => $sccId) {
         $zipArchive->addFromString($sccId.'.torrent', $scc->downloadTorrentById($sccId, false));
     }
 
