@@ -81,22 +81,26 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
         respond('', 'Invalid json', false);
     }
 
-    $zipFile = tempnam("tmp", "zip");
-    $zipArchive = new ZipArchive();
-    $zipArchive->open($zipFile, ZipArchive::OVERWRITE);
+    try {
+        $zipFile = tempnam("tmp", "zip");
+        $zipArchive = new ZipArchive();
+        $zipArchive->open($zipFile, ZipArchive::OVERWRITE);
 
-    foreach ($jsonDecoded as $id => $sccId) {
-        $zipArchive->addFromString($sccId.'.torrent', $scc->downloadTorrentById($sccId, false));
+        foreach ($jsonDecoded as $id => $sccId) {
+            $zipArchive->addFromString($sccId.'.torrent', $scc->downloadTorrentById($sccId, false));
+        }
+
+        $zipArchive->close();
+
+        $app->response->headers->set('Content-Type', 'application/zip');
+        $app->response->headers->set('Content-Length', filesize($zipFile));
+        $app->response->headers->set('Content-Disposition', 'attachment; filename="multi_'.time().'.zip"');
+
+        readfile($zipFile);
+        unlink($zipFile);
+    } catch (Exception $e) {
+        respond('', $e->getMessage(), false);
     }
-
-    $zipArchive->close();
-
-    $app->response->headers->set('Content-Type', 'application/zip');
-    $app->response->headers->set('Content-Length', filesize($zipFile));
-    $app->response->headers->set('Content-Disposition', 'attachment; filename="multi_'.time().'.zip"');
-
-    readfile($zipFile);
-    unlink($zipFile);
 });
 
 $app->run();

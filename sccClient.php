@@ -581,6 +581,7 @@ class sccClient
                     */
 
                     $torrents[$rowId]['added'] = $timestamp[1].' '.$timestamp[2];
+                    $torrents[$rowId]['dl_link'] = 'https://sceneaccess.eu/download/'.$torrents[$rowId]['sccId'].'/'.$this->getPasskey().'/'.$torrents[$rowId]['name'].'.torrent';
                 }
             }
         }
