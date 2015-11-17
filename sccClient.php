@@ -51,9 +51,23 @@ class sccClient
             36 => 'XXX/0DAY',
         ];
 
-        $this->db = new PDO("mysql:host=localhost;dbname=scc;", 'root', 'rootpwd');
+        $this->db = new PDO("mysql:host=localhost;dbname=scc;", 'root', 'rootspwd');
         $this->redis = new Predis\Client();
         $this->http = new Client(['cookies' => true]);
+        $this->apiurl = $this->getApiUrl();
+    }
+
+    private function getApiUrl()
+    {
+        $s = $_SERVER;
+        $ssl = (!empty($s['HTTPS']) && $s['HTTPS'] == 'on') ? true:false;
+        $sp = strtolower($s['SERVER_PROTOCOL']);
+        $protocol = substr($sp, 0, strpos($sp, '/')) . (($ssl) ? 's' : '');
+        $port = $s['SERVER_PORT'];
+        $port = ((!$ssl && $port == '80') || ($ssl && $port == '443')) ? '' : ':'.$port;
+        $host = (isset($s['HTTP_X_FORWARDED_HOST'])) ? $s['HTTP_X_FORWARDED_HOST'] : (isset($s['HTTP_HOST']) ? $s['HTTP_HOST'] : null);
+        $host = isset($host) ? $host : $s['SERVER_NAME'] . $port;
+        return $protocol . '://' . $host.$s['SCRIPT_NAME'];
     }
 
     /**
@@ -317,7 +331,7 @@ class sccClient
             $categories .= '&c'.$categoryId.'=1';
         }
 
-        return 'https://sceneaccess.eu/all?search='.urlencode($search).'&method=2'.$categories;
+        return (string) 'https://sceneaccess.eu/all?search='.urlencode($search).'&method=2'.$categories;
     }
 
     /**
@@ -581,7 +595,8 @@ class sccClient
                     */
 
                     $torrents[$rowId]['added'] = $timestamp[1].' '.$timestamp[2];
-                    $torrents[$rowId]['dl_link'] = 'https://sceneaccess.eu/download/'.$torrents[$rowId]['sccId'].'/'.$this->getPasskey().'/'.$torrents[$rowId]['name'].'.torrent';
+                    $torrents[$rowId]['dl_link'] = $this->apiurl.'/download/'.$torrents[$rowId]['sccId'].'/'.$this->getPasskey();
+
                 }
             }
         }

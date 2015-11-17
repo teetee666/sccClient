@@ -9,7 +9,7 @@ $scc = new sccClient();
 function respond($msgTrue = '', $msgFalse = '', $status = true)
 {
     if ($status) {
-        die(
+        return(
             json_encode(
                 array(
                     'status' => 'success',
@@ -19,7 +19,7 @@ function respond($msgTrue = '', $msgFalse = '', $status = true)
             )
         );
     } else {
-        die(
+        return(
             json_encode(
                 array(
                     'status' => 'failure',
@@ -34,19 +34,26 @@ function respond($msgTrue = '', $msgFalse = '', $status = true)
 $app->post('/login/:username/:password', function ($username, $password) use ($app, $scc) {
     $app->response->headers->set('Content-Type', 'application/json');
 
-    $response = $scc->login($username, $password);
+    $apiResponse = $scc->login($username, $password);
 
-    respond('token: '.$response, 'something went wrong', $response);
+    try {
+        return $app->response->write(respond('token: '.$apiResponse, 'something went wrong', $apiResponse));
+    } catch (Exception $e) {
+        return $app->response->write(respond('', $e->getMessage(), false));
+    }
 });
 
 $app->get('/search/:search/:token', function ($search, $token) use ($app, $scc) {
     $app->response->headers->set('Content-Type', 'application/json');
 
     $scc->setToken($token);
-
     $result = $scc->search($search);
 
-    respond($result, 'something went wrong', $result);
+    try {
+        return $app->response->write(respond($result, 'something went wrong', $result));
+    } catch (Exception $e) {
+        return $app->response->write(respond('', $e->getMessage(), false));
+    }
 });
 
 $app->get('/download/:id/:token', function ($id, $token) use ($app, $scc) {
@@ -55,7 +62,11 @@ $app->get('/download/:id/:token', function ($id, $token) use ($app, $scc) {
 
     $scc->setToken($token);
 
-    echo $scc->downloadTorrentById($id, false);
+    try {
+        return $app->response->write($scc->downloadTorrentById($id, false));
+    } catch (Exception $e) {
+        return $app->response->write(respond('', $e->getMessage(), false));
+    }
 });
 
 $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
@@ -68,17 +79,17 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
             foreach ($jsonDecoded as $id => $sccId) {
                 if (is_numeric($sccId)) {
                     if (!$scc->torrentExists($sccId)) {
-                        respond('', $sccId.' is unknown id, use search first', false);
+                        return $app->response->write(respond('', $sccId.' is unknown id, use search first', false));
                     }
                 } else {
-                    respond('', 'one or more ids in given list not numeric', false);
+                    return $app->response->write(respond('', 'one or more ids in given list not numeric', false));
                 }
             }
         } else {
-            respond('', 'not valid array', false);
+            return $app->response->write(respond('', 'not valid array', false));
         }
     } else {
-        respond('', 'Invalid json', false);
+        return $app->response->write(respond('', 'Invalid json', false));
     }
 
     try {
@@ -92,14 +103,15 @@ $app->post('/multidownload/:token', function ($token) use ($app, $scc) {
 
         $zipArchive->close();
 
-        $app->response->headers->set('Content-Type', 'application/zip');
-        $app->response->headers->set('Content-Length', filesize($zipFile));
+        $app->response->headers->set('Content-Type', 'application/zip'); $app->response->headers->set('Content-Length', filesize($zipFile));
         $app->response->headers->set('Content-Disposition', 'attachment; filename="multi_'.time().'.zip"');
 
-        readfile($zipFile);
+        $zipData = file_get_contents($zipFile);
         unlink($zipFile);
+
+        return $app->response->write($zipData);
     } catch (Exception $e) {
-        respond('', $e->getMessage(), false);
+        return $app->response->write(respond('', $e->getMessage(), false));
     }
 });
 
